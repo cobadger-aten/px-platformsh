@@ -11,7 +11,6 @@ use Pr0jectX\PxPlatformsh\ProjectX\Plugin\CommandType\PlatformshCommandType;
 use Pr0jectX\Px\Task\LoadTasks as PxTasks;
 use Psr\Cache\CacheItemInterface;
 use Robo\Collection\CollectionBuilder;
-use Stringy\StaticStringy;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Process\ExecutableFinder;
 
@@ -327,6 +326,18 @@ class PlatformshCommand extends PluginCommandTaskBase
         }
     }
 
+    private function csvStringToOptions($csv_string, $key) {
+      $lines = explode(PHP_EOL, $csv_string);
+      $csv_parsed = array_map('str_getcsv', $lines);
+      $header = array_shift($csv_parsed);
+
+      return array_reduce($csv_parsed, function($carry, $item) use ($header, $key) {
+          $arr = array_combine($header, $item);
+          $carry[$arr[$key]] = $arr[$key];
+          return $carry;
+      }, []);
+    }
+
     /**
      *  Sync the remote platformsh database with the local environment.
      *
@@ -351,7 +362,25 @@ class PlatformshCommand extends PluginCommandTaskBase
 //            $siteName = $this->getPlatformshSiteName();
 //            $siteEnv = $siteEnv ?? $this->askForPlatformshSiteEnv();
 
-            $app = 'admin';
+            $exclude = [];
+            $output = $this->cliCommand()
+                ->setSubCommand('app:list')
+                ->option('format', 'csv')
+                ->printOutput(false)
+                ->silent(true)
+                ->run();
+
+            $csv_string = $output->getMessage();
+            $choices = $this->csvStringToOptions($csv_string, 'Name');
+
+            $app = $this->askChoice(
+                'Select the environment app',
+                array_filter($choices, function ($key) use ($exclude) {
+                    return !in_array($key, $exclude);
+                }, ARRAY_FILTER_USE_KEY),
+                $default
+            );
+
             $collection = $this->collectionBuilder();
 //
 //            if (!$opts['no-backup']) {
