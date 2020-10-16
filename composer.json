@@ -1,6 +1,6 @@
 {
-    "name": "pr0ject-x/px-pantheon",
-    "description": "The project-X pantheon.io plugin.",
+    "name": "pr0ject-x/px-platformsh",
+    "description": "The project-X platform.sh plugin.",
     "type": "px-plugin",
     "license": "MIT",
     "prefer-stable": true,
@@ -21,7 +21,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Pr0jectX\\PxPantheon\\": "./src"
+            "Pr0jectX\\PxPlatformsh\\": "./src"
         }
     }
 }
