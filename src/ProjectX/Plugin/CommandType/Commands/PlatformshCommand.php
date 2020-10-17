@@ -16,6 +16,16 @@ use Symfony\Component\Process\ExecutableFinder;
 
 /**
  * Define the platformsh command.
+ *
+ * TODO: Discuss the difference in CLI capabilities for these methods:
+ * - platformshInfo
+ * - platformshImport
+ *   for pantheon this is connection:info, this isn't really available the same way
+ *
+ * - create a base class
+ * - potentially abstract out "isCliInstalled", "installCli"
+ *   and add to a base class
+ *
  */
 class PlatformshCommand extends PluginCommandTaskBase
 {
@@ -26,146 +36,124 @@ class PlatformshCommand extends PluginCommandTaskBase
      */
     public function platformshLogin(): void
     {
+        $login_type = $this->askChoice('Select the login type', [
+            'api-token-login' => 'Login in to Platform.sh using an API token',
+            'browser-login' => 'Log in to Platform.sh via a browser',
+        ], 'api-token-login');
         Platformsh::displayBanner();
 
         $this->cliCommand()
-            ->setSubCommand('auth:login')
+            ->setSubCommand("auth:$login_type")
             ->run();
     }
 
-    /**
-     * Display the platformsh developer information.
-     *
-     * @param null $siteEnv
-     *   The platformsh site environment.
-     */
-    public function platformshInfo($siteEnv = null): void
-    {
-        //Platformsh::displayBanner();
-
-        try {
-            $siteName = $this->getPlatformshSiteName();
-            $siteEnv = $siteEnv ?? $this->askForPlatformshSiteEnv();
-
-            $this->cliCommand()
-                ->setSubCommand('connection:info')
-                ->arg("{$siteName}.{$siteEnv}")
-                ->run();
-        } catch (\Exception $exception) {
-            $this->error($exception->getMessage());
-        }
-    }
-
-    /**
-     * Setup the project to use the platformsh service.
-     */
-    public function platformshSetup(): void
-    {
-        Platformsh::displayBanner();
-
-        $phpVersions = PxApp::activePhpVersions();
-
-        $phpVersion = $this->askChoice(
-            'Select the PHP version',
-            $phpVersions,
-            $phpVersions[1]
-        );
-
-        $this->taskWriteToFile(PxApp::projectRootPath() . '/platformsh.yml')
-            ->text(Platformsh::loadTemplateFile('platformsh.yml'))
-            ->place('PHP_VERSION', $phpVersion)
-            ->run();
-
-        $framework = $this->askChoice('Select the PHP framework', [
-            'drupal' => 'Drupal',
-            'wordpress' => 'Wordpress'
-        ], 'drupal');
-
-        try {
-            if ($framework === 'drupal') {
-                $this->setupDrupal();
-            }
-        } catch (\Exception $exception) {
-            $this->error($exception->getMessage());
-        }
-    }
+//    /**
+//     * Setup the project to use the platformsh service.
+//     */
+//    public function platformshSetup(): void
+//    {
+//        Platformsh::displayBanner();
+//
+//        $phpVersions = PxApp::activePhpVersions();
+//
+//        $phpVersion = $this->askChoice(
+//            'Select the PHP version',
+//            $phpVersions,
+//            $phpVersions[1]
+//        );
+//
+//        $this->taskWriteToFile(PxApp::projectRootPath() . '/platformsh.yml')
+//            ->text(Platformsh::loadTemplateFile('platformsh.yml'))
+//            ->place('PHP_VERSION', $phpVersion)
+//            ->run();
+//
+//        $framework = $this->askChoice('Select the PHP framework', [
+//            'drupal' => 'Drupal',
+//            'wordpress' => 'Wordpress'
+//        ], 'drupal');
+//
+//        try {
+//            if ($framework === 'drupal') {
+//                $this->setupDrupal();
+//            }
+//        } catch (\Exception $exception) {
+//            $this->error($exception->getMessage());
+//        }
+//    }
 
     /**
      * Install the terminus command utility system-wide.
      */
-    public function platformshInstallTerminus(): void
+    public function platformshInstallCli(): void
     {
-        if (!$this->isTerminusInstalled()) {
+        if (!$this->isCliInstalled()) {
             try {
                 $userDir = PxApp::userDir();
 
                 $stack = $this->taskExecStack()
-                    ->exec("mkdir {$userDir}/terminus")
-                    ->exec("cd {$userDir}/terminus")
-                    ->exec('curl -O https://raw.githubusercontent.com/platformsh-systems/terminus-installer/master/builds/installer.phar')
-                    ->exec('php installer.phar install');
+                    ->exec("curl -sS https://platform.sh/cli/installer | php");
 
                 $results = $stack->run();
 
                 if ($results->wasSuccessful()) {
                     $this->success(
-                        'The terminus utility has successfully been installed!'
+                        'Platform CLI has successfully been installed!'
                     );
                 }
             } catch (\Exception $exception) {
                 $this->error($exception->getMessage());
             }
         } else {
-            $this->note('The terminus utility has already been installed!');
+            $this->note('Platform CLI is already installed!');
         }
     }
 
-    /**
-     * Import the local database with the remote platformsh site.
-     *
-     * @param string $dbFile
-     *   The local path to the database file.
-     * @param string $siteEnv
-     *   The platformsh site environment.
-     */
-    public function platformshImport(
-        string $dbFile = null,
-        string $siteEnv = 'dev'
-    ): void {
-
-        try {
-            $siteName = $this->getPlatformshSiteName();
-
-            if (
-                !isset(Platformsh::environments()[$siteEnv])
-                || in_array($siteEnv, ['test', 'live'])
-            ) {
-                throw new \RuntimeException(
-                    'The environment is invalid! Only the dev environment is allowed at this time!'
-                );
-            }
-            $dbFile = $dbFile ?? $this->exportEnvDatabase();
-
-            if (!file_exists($dbFile)) {
-                throw new \RuntimeException(
-                    'The database file path is invalid!'
-                );
-            }
-
-            $result = $this->cliCommand()
-                ->setSubCommand('import:database')
-                ->args(["{$siteName}.{$siteEnv}", $dbFile])
-                ->run();
-
-            if ($result->wasSuccessful()) {
-                $this->success(
-                    'The database was successfully imported into the platformsh site.'
-                );
-            }
-        } catch (\Exception $exception) {
-            $this->error($exception->getMessage());
-        }
-    }
+//    /**
+//     * Import the local database with the remote platformsh site.
+//     *
+//     * @param string $dbFile
+//     *   The local path to the database file.
+//     * @param string $siteEnv
+//     *   The platformsh site environment.
+//     */
+//    public function platformshImport(
+//        string $dbFile = null,
+//        string $siteEnv = 'dev'
+//    ): void {
+//
+//        try {
+//            $siteName = $this->getPlatformshSiteName();
+//
+//            if (
+//                !isset(Platformsh::environments()[$siteEnv])
+//                || in_array($siteEnv, ['test', 'live'])
+//            ) {
+//                throw new \RuntimeException(
+//                    'The environment is invalid! Only the dev environment is allowed at this time!'
+//                );
+//            }
+//            $dbFile = $dbFile ?? $this->exportEnvDatabase();
+//
+//            if (!file_exists($dbFile)) {
+//                throw new \RuntimeException(
+//                    'The database file path is invalid!'
+//                );
+//            }
+//
+//            $result = $this->cliCommand()
+//                ->setSubCommand('import:database')
+//                ->args(["{$siteName}.{$siteEnv}", $dbFile])
+//                ->run();
+//
+//            if ($result->wasSuccessful()) {
+//                $this->success(
+//                    'The database was successfully imported into the platformsh site.'
+//                );
+//            }
+//        } catch (\Exception $exception) {
+//            $this->error($exception->getMessage());
+//        }
+//    }
 
     /**
      * Run drush commands against the remote Drupal site.
@@ -182,7 +170,7 @@ class PlatformshCommand extends PluginCommandTaskBase
             $siteEnv = $this->askForPlatformshSiteEnv();
 
             $command = $this->cliCommand()
-                ->setSubCommand('remote:drush')
+                ->setSubCommand('drush')
                 ->arg("{$siteName}.{$siteEnv}");
 
             if (!empty($cmd)) {
@@ -326,7 +314,30 @@ class PlatformshCommand extends PluginCommandTaskBase
         }
     }
 
-    private function csvStringToOptions($csv_string, $key) {
+    protected function askForPlatformApp(array $exclude = [])
+    {
+      $exclude = [];
+      $output = $this->cliCommand()
+          ->setSubCommand('app:list')
+          ->option('format', 'csv')
+          ->printOutput(false)
+          ->silent(true)
+          ->run();
+
+      $csv_string = $output->getMessage();
+      $choices = $this->csvStringToOptions($csv_string, 'Name');
+
+      return $this->askChoice(
+          'Select the environment app',
+          array_filter($choices, function ($key) use ($exclude) {
+              return !in_array($key, $exclude);
+          }, ARRAY_FILTER_USE_KEY),
+          $default
+      );
+    }
+
+    private function csvStringToOptions($csv_string, $key)
+    {
       $lines = explode(PHP_EOL, $csv_string);
       $csv_parsed = array_map('str_getcsv', $lines);
       $header = array_shift($csv_parsed);
@@ -354,50 +365,24 @@ class PlatformshCommand extends PluginCommandTaskBase
         'filename' => 'remote.db.sql.gz'
     ]): void
     {
-        //Platformsh::displayBanner();
+        Platformsh::displayBanner();
 
         try {
-            // TODO: prompt for app
-            // allow for env override, but that is also automatically calculated with platform CLI.
-//            $siteName = $this->getPlatformshSiteName();
-//            $siteEnv = $siteEnv ?? $this->askForPlatformshSiteEnv();
-
-            $exclude = [];
-            $output = $this->cliCommand()
-                ->setSubCommand('app:list')
-                ->option('format', 'csv')
-                ->printOutput(false)
-                ->silent(true)
-                ->run();
-
-            $csv_string = $output->getMessage();
-            $choices = $this->csvStringToOptions($csv_string, 'Name');
-
-            $app = $this->askChoice(
-                'Select the environment app',
-                array_filter($choices, function ($key) use ($exclude) {
-                    return !in_array($key, $exclude);
-                }, ARRAY_FILTER_USE_KEY),
-                $default
-            );
+            // TODO: Allow for env override.
+            $app = $this->askForPlatformApp();
 
             $collection = $this->collectionBuilder();
-//
-//            if (!$opts['no-backup']) {
-//                $collection->addTask($this->cliCommand()
-//                    ->setSubCommand('backup:create')
-//                    ->arg("{$siteName}.{$siteEnv}")
-//                    ->option('element', 'db'));
-//            }
-//
+
+            // TODO: backup:create might not be needed for this.
+
             $dbBackupFilename = implode(DIRECTORY_SEPARATOR, [
                 PxApp::projectTempDir(),
                 $opts['filename']
             ]);
-//
-//            if (file_exists($dbBackupFilename)) {
-//                $this->_remove($dbBackupFilename);
-//            }
+
+            if (file_exists($dbBackupFilename)) {
+                $this->_remove($dbBackupFilename);
+            }
 
             $collection->addTask($this->cliCommand()
                 ->setSubCommand('db:dump')
@@ -475,103 +460,103 @@ class PlatformshCommand extends PluginCommandTaskBase
         );
     }
 
-    /**
-     * Export the environment database.
-     *
-     * @return string
-     *   Return the exported database file.
-     */
-    protected function exportEnvDatabase(): string
-    {
-        if ($command = $this->findCommand('db:export')) {
-            $dbFilename = 'local.db';
+//    /**
+//     * Export the environment database.
+//     *
+//     * @return string
+//     *   Return the exported database file.
+//     */
+//    protected function exportEnvDatabase(): string
+//    {
+//        if ($command = $this->findCommand('db:export')) {
+//            $dbFilename = 'local.db';
+//
+//            $dbExportFile = implode(
+//                DIRECTORY_SEPARATOR,
+//                [PxApp::projectTempDir(), $dbFilename]
+//            );
+//            $this->_remove($dbExportFile);
+//
+//            $exportResult = $this->taskSymfonyCommand($command)
+//                ->arg('export_dir', PxApp::projectTempDir())
+//                ->opt('filename', $dbFilename)
+//                ->run();
+//
+//            if ($exportResult->wasSuccessful()) {
+//                return "{$dbExportFile}.sql.gz";
+//            }
+//        }
+//
+//        throw new \RuntimeException('Unable to export the local database.');
+//    }
 
-            $dbExportFile = implode(
-                DIRECTORY_SEPARATOR,
-                [PxApp::projectTempDir(), $dbFilename]
-            );
-            $this->_remove($dbExportFile);
-
-            $exportResult = $this->taskSymfonyCommand($command)
-                ->arg('export_dir', PxApp::projectTempDir())
-                ->opt('filename', $dbFilename)
-                ->run();
-
-            if ($exportResult->wasSuccessful()) {
-                return "{$dbExportFile}.sql.gz";
-            }
-        }
-
-        throw new \RuntimeException('Unable to export the local database.');
-    }
-
-    /**
-     * Setup the Drupal platformsh integration.
-     */
-    protected function setupDrupal(): void
-    {
-        if (
-            !PxApp::composerHasPackage('drupal/core')
-            && !PxApp::composerHasPackage('drupal/core-recommended')
-        ) {
-            throw new \RuntimeException(
-                'Install Drupal core prior to running the platformsh setup.'
-            );
-        }
-        $drupalRoot = $this->findDrupalRoot() ?? $this->ask(
-            'Input the Drupal root'
-        );
-
-        $drupalRootPath = implode(
-            DIRECTORY_SEPARATOR,
-            [PxApp::projectRootPath(), $drupalRoot]
-        );
-
-        if (!file_exists($drupalRootPath)) {
-            throw new \RuntimeException(
-                "The Drupal root path doesn't exist!"
-            );
-        }
-        $collection = $this->collectionBuilder();
-        $drupalDefault = "{$drupalRootPath}/sites/default";
-
-        $collection
-            ->addTask(
-                $this->taskWriteToFile("{$drupalDefault}/settings.platformsh.php")
-                    ->text(Platformsh::loadTemplateFile('drupal/settings.platformsh.txt'))
-            );
-
-        $collection->addTask(
-            $this->taskWriteToFile("{$drupalDefault}/settings.php")
-                ->append()
-                ->appendUnlessMatches(
-                    '/^include.+settings.platformsh.php";$/m',
-                    Platformsh::loadTemplateFile('drupal/settings.include.txt')
-                )
-        );
-
-        if ($this->confirm('Add Drupal quicksilver scripts?', true)) {
-            $collection->addTaskList([
-                $this->taskWriteToFile(PxApp::projectRootPath() . '/platformsh.yml')
-                    ->append()
-                    ->appendUnlessMatches(
-                        '/^workflows:$/',
-                        Platformsh::loadTemplateFile('drupal/platformsh.workflows.txt')
-                    ),
-                $this->taskWriteToFile("{$drupalRootPath}/private/hooks/afterSync.php")
-                    ->text(Platformsh::loadTemplateFile('drupal/hooks/afterSync.txt')),
-                $this->taskWriteToFile("{$drupalRootPath}/private/hooks/afterDeploy.php")
-                    ->text(Platformsh::loadTemplateFile('drupal/hooks/afterDeploy.txt')),
-            ]);
-        }
-        $result = $collection->run();
-
-        if ($result->wasSuccessful()) {
-            $this->success(
-                sprintf('The platformsh setup was successful for the Drupal framework!')
-            );
-        }
-    }
+//    /**
+//     * Setup the Drupal platformsh integration.
+//     */
+//    protected function setupDrupal(): void
+//    {
+//        if (
+//            !PxApp::composerHasPackage('drupal/core')
+//            && !PxApp::composerHasPackage('drupal/core-recommended')
+//        ) {
+//            throw new \RuntimeException(
+//                'Install Drupal core prior to running the platformsh setup.'
+//            );
+//        }
+//        $drupalRoot = $this->findDrupalRoot() ?? $this->ask(
+//            'Input the Drupal root'
+//        );
+//
+//        $drupalRootPath = implode(
+//            DIRECTORY_SEPARATOR,
+//            [PxApp::projectRootPath(), $drupalRoot]
+//        );
+//
+//        if (!file_exists($drupalRootPath)) {
+//            throw new \RuntimeException(
+//                "The Drupal root path doesn't exist!"
+//            );
+//        }
+//        $collection = $this->collectionBuilder();
+//        $drupalDefault = "{$drupalRootPath}/sites/default";
+//
+//        $collection
+//            ->addTask(
+//                $this->taskWriteToFile("{$drupalDefault}/settings.platformsh.php")
+//                    ->text(Platformsh::loadTemplateFile('drupal/settings.platformsh.txt'))
+//            );
+//
+//        $collection->addTask(
+//            $this->taskWriteToFile("{$drupalDefault}/settings.php")
+//                ->append()
+//                ->appendUnlessMatches(
+//                    '/^include.+settings.platformsh.php";$/m',
+//                    Platformsh::loadTemplateFile('drupal/settings.include.txt')
+//                )
+//        );
+//
+//        if ($this->confirm('Add Drupal quicksilver scripts?', true)) {
+//            $collection->addTaskList([
+//                $this->taskWriteToFile(PxApp::projectRootPath() . '/platformsh.yml')
+//                    ->append()
+//                    ->appendUnlessMatches(
+//                        '/^workflows:$/',
+//                        Platformsh::loadTemplateFile('drupal/platformsh.workflows.txt')
+//                    ),
+//                $this->taskWriteToFile("{$drupalRootPath}/private/hooks/afterSync.php")
+//                    ->text(Platformsh::loadTemplateFile('drupal/hooks/afterSync.txt')),
+//                $this->taskWriteToFile("{$drupalRootPath}/private/hooks/afterDeploy.php")
+//                    ->text(Platformsh::loadTemplateFile('drupal/hooks/afterDeploy.txt')),
+//            ]);
+//        }
+//        $result = $collection->run();
+//
+//        if ($result->wasSuccessful()) {
+//            $this->success(
+//                sprintf('The platformsh setup was successful for the Drupal framework!')
+//            );
+//        }
+//    }
 
     /**
      * Find the Drupal root directory.
