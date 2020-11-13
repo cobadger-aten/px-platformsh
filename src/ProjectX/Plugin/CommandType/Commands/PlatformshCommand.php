@@ -332,7 +332,6 @@ class PlatformshCommand extends PluginCommandTaskBase
           array_filter($choices, function ($key) use ($exclude) {
               return !in_array($key, $exclude);
           }, ARRAY_FILTER_USE_KEY),
-          $default
       );
     }
 
@@ -349,6 +348,55 @@ class PlatformshCommand extends PluginCommandTaskBase
       }, []);
     }
 
+    private function csvToArray($csv_string, $column_count) {
+      $lines = explode(PHP_EOL, $csv_string);
+      $csv_parsed = array_map('str_getcsv', $lines);
+
+      $header = array_shift($csv_parsed);
+      $header_key = array_shift($header);
+      $info_array = [];
+      foreach ($csv_parsed as $row) {
+        $key = array_shift($row);
+        $row = array_pad($row, count($header), '');
+
+        $info_array[$key] = count($row) == 1 ? reset($row) : array_combine($header, $row);
+      }
+
+      return $info_array;
+    }
+
+    private function getEnvironmentList() {
+      $info = $this->cliCommand()
+        ->setSubCommand('environment:list')
+        ->option('format', 'csv')
+        ->printOutput(false)
+        ->silent(true)
+        ->run();
+
+      $csv_string = $info->getMessage();
+      $csv_array = $this->csvToArray($csv_string, 3);
+
+      return array_filter($csv_array, function($value) {
+          return !empty($value['Status']) && $value['Status'] == 'Active';
+      });
+      return array_map(function($value) {
+          return $value['Label'] ?? FALSE;
+      }, $csv_array_filtered);
+    }
+
+    private function getEnvironmentInfo() {
+      $info = $this->cliCommand()
+        ->setSubCommand('environment:info')
+        ->option('format', 'csv')
+        ->printOutput(false)
+        ->silent(true)
+        ->run();
+
+      $csv_string = $info->getMessage();
+
+      return $this->csvToArray($csv_string, 2);
+    }
+
     /**
      *  Sync the remote platformsh database with the local environment.
      *
@@ -359,16 +407,35 @@ class PlatformshCommand extends PluginCommandTaskBase
      *   Don't create a backup prior to database retrieval.
      * @option $filename
      *   The filename of the remote database that's downloaded.
+     * @option $env
+     *   The branch name with an active environment.
      */
     public function platformshSync(string $siteEnv = null, $opts = [
         'no-backup' => false,
-        'filename' => 'remote.db.sql.gz'
+        'filename' => 'remote.db.sql.gz',
+        'env' => 'auto',
     ]): void
     {
         Platformsh::displayBanner();
 
+        if ($siteEnv) {
+          $list = $this->getEnvironmentList();
+          if (empty($list[$siteEnv])) {
+            $this->error("The branch name $siteEnv is either invalid or has no active environment");
+          }
+        }
+        if (!$siteEnv) {
+          $env_info = $this->getEnvironmentInfo();
+          if ($env_info['status'] == 'inactive') {
+            $this->warning("The current branch {$env_info['id']} does not have an active environment");
+            $siteEnv = $this->askForPlatformshSiteEnv('master');
+          }
+          else {
+            $siteEnv = $env_info['id'];
+          }
+        }
+
         try {
-            // TODO: Allow for env override.
             $app = $this->askForPlatformApp();
 
             $collection = $this->collectionBuilder();
@@ -387,6 +454,7 @@ class PlatformshCommand extends PluginCommandTaskBase
             $collection->addTask($this->cliCommand()
                 ->setSubCommand('db:dump')
                 ->option('app', $app)
+                ->option('environment', $siteEnv)
                 ->option('file', $dbBackupFilename));
 
             $backupResult = $collection->run();
@@ -396,7 +464,7 @@ class PlatformshCommand extends PluginCommandTaskBase
             } else {
                 throw new \RuntimeException(sprintf(
                     'Unable to sync the %s.%s database with environment.',
-                    $siteName,
+                    $this->getPlatformshSiteName(),
                     $siteEnv
                 ));
             }
@@ -616,9 +684,9 @@ class PlatformshCommand extends PluginCommandTaskBase
     {
         return $this->askChoice(
             'Select the platformsh site environment',
-            array_filter(Platformsh::environments(), function ($key) use ($exclude) {
-                return !in_array($key, $exclude);
-            }, ARRAY_FILTER_USE_KEY),
+            array_map(function($value) {
+                return $value['Label'] ?? FALSE;
+            }, $this->getEnvironmentList()),
             $default
         );
     }
