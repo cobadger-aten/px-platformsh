@@ -47,6 +47,22 @@ class PlatformshCommand extends PluginCommandTaskBase
             ->run();
     }
 
+    public function platformshInfo($siteEnv = null): void
+    {
+
+        Platformsh::displayBanner();
+        $siteEnv = $siteEnv ?? $this->askForPlatformshSiteEnv();
+        try {
+        $this->cliCommand()
+             ->setSubCommand('environment:info')
+             ->option('environment', $siteEnv)
+           ->run();
+        } catch (\Exception $exception) {
+            $this->error($exception->getMessage());
+        }
+
+    }
+
 //    /**
 //     * Setup the project to use the platformsh service.
 //     */
