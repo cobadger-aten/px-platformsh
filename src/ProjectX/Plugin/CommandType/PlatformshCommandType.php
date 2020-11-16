@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Pr0jectX\PxPlatformsh\ProjectX\Plugin\CommandType;
 
+use Platformsh\ConfigReader\Config;
 use Pr0jectX\Px\ConfigTreeBuilder\ConfigTreeBuilder;
 use Pr0jectX\Px\ProjectX\Plugin\PluginCommandRegisterInterface;
 use Pr0jectX\Px\ProjectX\Plugin\PluginConfigurationBuilderInterface;
 use Pr0jectX\Px\ProjectX\Plugin\PluginTasksBase;
+use Pr0jectX\Px\PxApp;
 use Pr0jectX\PxPlatformsh\ProjectX\Plugin\CommandType\Commands\PlatformshCommand;
 use Symfony\Component\Console\Question\Question;
 
@@ -50,6 +52,7 @@ class PlatformshCommandType extends PluginTasksBase implements PluginConfigurati
      */
     public function getPlatformshSite(): string
     {
+    $exec = $this->taskExec('platform')->arg('project:info')->option('format', 'csv')->printOutput(FALSE)->run();
         return $this->getConfigurations()['site'] ?? '';
     }
 

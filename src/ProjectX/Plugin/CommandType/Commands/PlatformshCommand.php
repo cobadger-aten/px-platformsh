@@ -51,6 +51,8 @@ class PlatformshCommand extends PluginCommandTaskBase
     {
 
         Platformsh::displayBanner();
+
+        $siteName = $this->getPlugin()->getPlatformshSite();
         $siteEnv = $siteEnv ?? $this->askForPlatformshSiteEnv();
         try {
         $this->cliCommand()
@@ -98,7 +100,7 @@ class PlatformshCommand extends PluginCommandTaskBase
 //    }
 
     /**
-     * Install the terminus command utility system-wide.
+     * Install the platform.sh command utility system-wide.
      */
     public function platformshInstallCli(): void
     {
@@ -347,7 +349,7 @@ class PlatformshCommand extends PluginCommandTaskBase
           'Select the environment app',
           array_filter($choices, function ($key) use ($exclude) {
               return !in_array($key, $exclude);
-          }, ARRAY_FILTER_USE_KEY),
+          }, ARRAY_FILTER_USE_KEY)
       );
     }
 
@@ -395,9 +397,6 @@ class PlatformshCommand extends PluginCommandTaskBase
       return array_filter($csv_array, function($value) {
           return !empty($value['Status']) && $value['Status'] == 'Active';
       });
-      return array_map(function($value) {
-          return $value['Label'] ?? FALSE;
-      }, $csv_array_filtered);
     }
 
     private function getEnvironmentInfo() {
@@ -840,7 +839,7 @@ class PlatformshCommand extends PluginCommandTaskBase
     /**
      * Retrieve the terminus command.
      *
-     * @return \Pr0jectX\PxPlatformsh\Task\ExecCommand|\Robo\Collection\CollectionBuilder
+     * @return \Pr0jectX\Px\Task\ExecCommand
      */
     protected function cliCommand(): CollectionBuilder
     {
