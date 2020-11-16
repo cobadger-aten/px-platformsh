@@ -52,8 +52,9 @@ class PlatformshCommandType extends PluginTasksBase implements PluginConfigurati
      */
     public function getPlatformshSite(): string
     {
-    $exec = $this->taskExec('platform')->arg('project:info')->option('format', 'csv')->printOutput(FALSE)->run();
-        return $this->getConfigurations()['site'] ?? '';
+      $exec = $this->taskExec('platform')->arg('project:info');
+      $reader = \Pr0jectX\PxPlatformsh\CommandOutputReader::init($exec);
+      return $reader->get('id') ?? '';
     }
 
     /**

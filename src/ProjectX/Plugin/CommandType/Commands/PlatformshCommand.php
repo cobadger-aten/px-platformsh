@@ -188,8 +188,8 @@ class PlatformshCommand extends PluginCommandTaskBase
             $siteEnv = $this->askForPlatformshSiteEnv();
 
             $command = $this->cliCommand()
-                ->setSubCommand('drush')
-                ->arg("{$siteName}.{$siteEnv}");
+              ->setSubCommand('drush')
+              ->option('environment', $siteEnv);
 
             if (!empty($cmd)) {
                 $command->args(['--', implode(' ', $cmd)]);
