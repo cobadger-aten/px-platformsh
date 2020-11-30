@@ -332,7 +332,7 @@ class PlatformshCommand extends PluginCommandTaskBase
         }
     }
 
-    protected function askForPlatformApp(array $exclude = [])
+    protected function askForPlatformApp($siteEnv, array $exclude = [])
     {
       $exclude = [];
       $output = $this->cliCommand()
@@ -340,6 +340,7 @@ class PlatformshCommand extends PluginCommandTaskBase
           ->option('format', 'csv')
           ->printOutput(false)
           ->silent(true)
+          ->option('environment', $siteEnv)
           ->run();
 
       $csv_string = $output->getMessage();
@@ -422,13 +423,10 @@ class PlatformshCommand extends PluginCommandTaskBase
      *   Don't create a backup prior to database retrieval.
      * @option $filename
      *   The filename of the remote database that's downloaded.
-     * @option $env
-     *   The branch name with an active environment.
      */
     public function platformshSync(string $siteEnv = null, $opts = [
         'no-backup' => false,
         'filename' => 'remote.db.sql.gz',
-        'env' => 'auto',
     ]): void
     {
         Platformsh::displayBanner();
@@ -439,19 +437,15 @@ class PlatformshCommand extends PluginCommandTaskBase
             $this->error("The branch name $siteEnv is either invalid or has no active environment");
           }
         }
+
         if (!$siteEnv) {
           $env_info = $this->getEnvironmentInfo();
-          if ($env_info['status'] == 'inactive') {
-            $this->warning("The current branch {$env_info['id']} does not have an active environment");
-            $siteEnv = $this->askForPlatformshSiteEnv('master');
-          }
-          else {
-            $siteEnv = $env_info['id'];
-          }
+          $default = !empty($env_info) && $env_info['status'] == 'active' ? $env_info['id'] : 'master';
+          $siteEnv = $this->askForPlatformshSiteEnv($default);
         }
 
         try {
-            $app = $this->askForPlatformApp();
+            $app = $this->askForPlatformApp($siteEnv);
 
             $collection = $this->collectionBuilder();
 
