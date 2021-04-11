@@ -519,10 +519,7 @@ class PlatformshCommand extends PluginCommandTaskBase
                 );
             }
             $syncDbCollection->addTask(
-                $this->taskSymfonyCommand($command)->arg(
-                    'source_file',
-                    $sourceFile
-                )
+                $this->taskSymfonyCommand($command)->arg('importFile', $sourceFile)
             );
             $importResult = $syncDbCollection->run();
 
